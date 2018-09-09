@@ -25,27 +25,20 @@ fs.mkdir(finalDir , function (err) { //создаем общую папку
     }
 });
 
-// let arrFilePathsProm = [];
-// function doIt() {
-//     return new Promise(function(resolve, reject)
-//     {
-//         let arrFilePaths = recursiveWalk(sourceDir, []);
-//         arrFilePathsProm = arrFilePaths.map(el => { // todo это не получается
-//             return request.get(el);
-//         });
-//         resolve( arrFilePathsProm ); // а дальше нужно создать папку и копировать файл
-//     });
-// }
-
-new Promise(function(resolve, reject)
-{
-    let arrFilePaths = recursiveWalk(sourceDir, []);
-    arrFilePathsProm = arrFilePaths.map(el => { // todo это не получается
-        return request.get(el);
+let arrFilePathsProm = [];
+function doIt() {
+    return new Promise(function(resolve, reject)
+    {
+        let arrFilePaths = recursiveWalk(sourceDir, []);
+        arrFilePathsProm = arrFilePaths.map(el => { // todo это не получается
+            return request.get(el);
+        });
+        resolve( arrFilePathsProm ); // а дальше нужно создать папку и копировать файл
     });
-    resolve( arrFilePathsProm ); // а дальше нужно создать папку и копировать файл
-})
-// .all(arrFilePathsProm) //(arrFilePathsProm.map(item => item.catch(err => err))) // todo это не получается
+}
+
+doIt()
+.all(arrFilePathsProm) //(arrFilePathsProm.map(item => item.catch(err => err))) // todo это не получается
 .then(function(result) // arrFilePaths here
 { // тут нужно создать папку и копировать файл
     console.log('arr:', result);
