@@ -25,30 +25,35 @@ fs.mkdir(finalDir , function (err) { //создаем общую папку
     }
 });
 
-function doIt() {
-    return new Promise(function(resolve, reject)
-    {
-        recursiveWalk(sourceDir, function (arrFilePaths) {
-            if (arrFilePaths !== undefined || arrFilePaths.length!==0){
-                // let arrPromises = arrFilePaths.map(el => { // todo это не получается
-                //     return request(el);
-                // });
-                resolve( arrFilePaths ); // а дальше нужно создать папку и копировать файл
-            }
-        });
-    });
-}
+// let arrFilePathsProm = [];
+// function doIt() {
+//     return new Promise(function(resolve, reject)
+//     {
+//         let arrFilePaths = recursiveWalk(sourceDir, []);
+//         arrFilePathsProm = arrFilePaths.map(el => { // todo это не получается
+//             return request.get(el);
+//         });
+//         resolve( arrFilePathsProm ); // а дальше нужно создать папку и копировать файл
+//     });
+// }
 
-doIt()
-// .all(arrPomises.map(item => item.catch(err => err))) // todo это не получается
+new Promise(function(resolve, reject)
+{
+    let arrFilePaths = recursiveWalk(sourceDir, []);
+    arrFilePathsProm = arrFilePaths.map(el => { // todo это не получается
+        return request.get(el);
+    });
+    resolve( arrFilePathsProm ); // а дальше нужно создать папку и копировать файл
+})
+// .all(arrFilePathsProm) //(arrFilePathsProm.map(item => item.catch(err => err))) // todo это не получается
 .then(function(result) // arrFilePaths here
 { // тут нужно создать папку и копировать файл
     console.log('arr:', result);
     let arrFilePaths = result;
-    for(let i=0; i<arrFilePaths.length; i++) {
-        createDir(arrFilePaths[i]);
-        return arrFilePaths[i];
-    }
+    arrFilePaths.forEach((item) => {
+        createDir(item);
+        return item;
+    });
     // console.log(result); //выведет сообщение из resolve
 })
 .then(function(result) // filePath here
@@ -91,35 +96,60 @@ doIt()
 //         }
 //     });
 // }
-
-function recursiveWalk(currentDirPath, callback) { // обход дерева в ширину
-    let arrFilePaths = [];
-    fs.readdir(currentDirPath, function (err, files) { // readdir=асинхрон. Считывает содержимое каталога.
-        if (err) {
-            return err;
-        }
-        files.forEach(function (elName) {
-            let elemPath = path.join(currentDirPath, elName); // делаем корретный URL
-            try {
-                let stat = fs.statSync(elemPath); // statSync=синхрон. вытаскиваем инфу по адресу пути(текущем объекте)
-                if (stat.isFile()) { // проверяем явл-ся ли он файлом
-                    arrFilePaths.push(elemPath);
-                }
-                else if (stat.isDirectory()) { // иначе это папка
-                    return recursiveWalk(elemPath, callback); // спускаемся ниже и повторяем
-                }
-            } catch (err) {
-                console.log('recursiveWalk ', err.message);
-                return err;
+/********************************************************************************************/
+/********************************************************************************************/
+function recursiveWalk(currentDirPath, arrFilePaths) { // обход дерева в ширину
+    try {
+        fs.readdirSync(currentDirPath).forEach(file => {
+        let elemPath = path.join(currentDirPath, file); // делаем корретный URL
+            let stat = fs.statSync(elemPath); // statSync=синхрон. вытаскиваем инфу по адресу пути(текущем объекте)
+            if (stat.isFile()) { // проверяем явл-ся ли он файлом
+                arrFilePaths.push(elemPath);
+            }
+            else if (stat.isDirectory()) { // иначе это папка
+                return recursiveWalk(elemPath, arrFilePaths); // спускаемся ниже и повторяем
             }
         });
-        if (arrFilePaths.length!==0)
-            callback(arrFilePaths);
+    }catch (err) {
+        console.log('recursiveWalk ', err);
+        return err;
+    }
+    if (currentDirPath === sourceDir){
+        return arrFilePaths;
         // console.log('recursiveWalk: ', arrFilePaths);
-        // return  arrFilePaths;
-    });
+    }
 }
-
+/********************************************************************************************/
+/********************************************************************************************/
+// function recursiveWalk(currentDirPath, callback) { // обход дерева в ширину
+//     let arrFilePaths = [];
+//     fs.readdir(currentDirPath, function (err, files) { // readdir=асинхрон. Считывает содержимое каталога.
+//         if (err) {
+//             return err;
+//         }
+//         files.forEach(function (elName) {
+//             let elemPath = path.join(currentDirPath, elName); // делаем корретный URL
+//             try {
+//                 let stat = fs.statSync(elemPath); // statSync=синхрон. вытаскиваем инфу по адресу пути(текущем объекте)
+//                 if (stat.isFile()) { // проверяем явл-ся ли он файлом
+//                     arrFilePaths.push(elemPath);
+//                 }
+//                 else if (stat.isDirectory()) { // иначе это папка
+//                     return recursiveWalk(elemPath, callback); // спускаемся ниже и повторяем
+//                 }
+//             } catch (err) {
+//                 console.log('recursiveWalk ', err.message);
+//                 return err;
+//             }
+//         });
+//         if (arrFilePaths.length!==0)
+//             callback(arrFilePaths);
+//         // console.log('recursiveWalk: ', arrFilePaths);
+//         // return  arrFilePaths;
+//     });
+// }
+/********************************************************************************************/
+/********************************************************************************************/
 function createDir(filePath) {
     let dirPath = getDirPath(filePath);
 
