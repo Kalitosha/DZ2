@@ -4,6 +4,8 @@ const fs = require('fs');
 const path = require('path');
 
 const remFlag = '-d';
+// let fileCopy = util.promisify(fs.copyFile);
+// const fileCopySync = util.promisify(fs.copyFileSync);
 
 let sourceDir = process.argv[2] || './dir_1';  // [2] путь к исходной папке = sourceDir
 let finalDir = process.argv[3] || './collection'; // [3] путь к итоговой папке = finalDir
@@ -38,8 +40,8 @@ doIt()
 .then(function(arrFilePaths)
 { // тут нужно создать папку
     console.log('then createDir');
-    arrFilePaths.forEach((filePath) => {
-        createDir(filePath);
+    arrFilePaths.forEach(async (filePath) => {
+        await createDir(filePath);
     });
     return arrFilePaths;
 })
@@ -47,9 +49,14 @@ doIt()
 { // тут нужно скопировать файлы
     console.log('then copyFile');
     arrFilePaths.forEach((filePath) => {
-        fs.copyFile(filePath, path.join(getDirPath(filePath), getFileName(filePath)), (err) => { // copyFile(что, куда)
-            if (err){console.log('movingFile: ', err.message);}
-        });
+        // await fileCopy(filePath, path.join(getDirPath(filePath), getFileName(filePath)), (err) => { // copyFile(что, куда)
+        //     if (err){console.log('movingFile: ', err.message);}
+        // });
+        try{
+            fs.copyFileSync( filePath, path.join(getDirPath(filePath), getFileName(filePath)) );
+        }catch (err) {
+            console.log('movingFile: ', err.message);
+        }
     });
 })
 .then(function()
@@ -106,21 +113,25 @@ function recursiveWalk(currentDirPath, arrFilePaths, arrDirPaths, param) { // о
 }
 
 function createDir(filePath) {
-    let dirPath = getDirPath(filePath);
-    fs.stat(dirPath, function (err, stat) {
-        if (err){
-            if(err.code === 'ENOENT') { // папка еще не существует
-                fs.mkdir(dirPath, function (err) { //создаем папку с литерой
-                    if (err) {
-                        if (err.code === 'EEXIST'){} //console.log(dirPath, ': has already exist');
-                        else console.log(dirPath, ':', err.code);
-                    }// else console.log(dirPath + " created successfully!");
-                });
-            }else{
-                console.log('createDir: ', err);
+    return new Promise((resolve, reject) => {
+        let dirPath = getDirPath(filePath);
+        fs.stat(dirPath, function (err, stat) {
+            if (err){
+                if(err.code === 'ENOENT') { // папка еще не существует
+                    fs.mkdir(dirPath, function (err) { //создаем папку с литерой
+                        if (!err) {// console.log(dirPath + " created successfully!");
+                            resolve();
+                        }
+                        else if (err.code === 'EEXIST'){resolve();} //console.log(dirPath, ': has already exist');
+                        reject();
+                    });
+                }else{
+                    console.log('createDir: ', err);
+                    reject();
+                }
             }
-        }
-    });
+        });
+    })
 }
 
 function getDirPath(filePath) {
