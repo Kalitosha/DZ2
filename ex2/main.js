@@ -16,54 +16,73 @@ let arrDirPaths = [];
 arrDirPaths.push(sourceDir);
 
 /***********************************************************************/
-fs.mkdir(finalDir , function (err) { //создаем общую папку
-    if (err) {
-        if (err === 'EEXIST') console.log('dir has already exist');
-        else {}//console.error(err);
-    } else{
-        // console.log(`Directory \"${finalDir}\" created successfully!`);
-    }
-});
-
-let arrFilePathsProm = [];
+// let arrFilePathsProm = [];
 function doIt() {
     return new Promise(function(resolve, reject)
     {
-        let arrFilePaths = recursiveWalk(sourceDir, []);
-        arrFilePathsProm = arrFilePaths.map(el => { // todo это не получается
-            return request.get(el);
+        console.log('then recursiveWalk');
+        fs.mkdir(finalDir , function (err) { //создаем общую папку
+            if (err) {
+                if (err.code === 'EEXIST'){
+                    console.log(`Directory \'${finalDir}\' has already exist`);
+                    resolve( recursiveWalk(sourceDir, [], [], 'f') );}
+                else {console.log('mkdir finalDir:', err);}
+            } else{
+                console.log(`Directory \"${finalDir}\" created successfully!`);
+                resolve( recursiveWalk(sourceDir, [], [], 'f') );
+            }
         });
-        resolve( arrFilePathsProm ); // а дальше нужно создать папку и копировать файл
+        // let arrFilePaths = recursiveWalk(sourceDir, []);
+        // arrFilePathsProm = arrFilePaths.map(el => { //надо сделать массив промисов // todo это не получается
+        //     // return request.get(el); // тут надо как-то превратить стринг в промис
+        // });
+        // resolve( arrFilePaths ); // а дальше нужно создать папку и копировать файл
     });
 }
 
 doIt()
-.all(arrFilePathsProm) //(arrFilePathsProm.map(item => item.catch(err => err))) // todo это не получается
-.then(function(result) // arrFilePaths here
-{ // тут нужно создать папку и копировать файл
-    console.log('arr:', result);
-    let arrFilePaths = result;
-    arrFilePaths.forEach((item) => {
-        createDir(item);
-        return item;
+// Promise.all(arrFilePathsProm) //(arrFilePathsProm.map(item => item.catch(err => err))) // todo это тоже не получается
+.then(function(arrFilePaths)
+{ // тут нужно создать папку
+    // console.log('arr:', arrFilePaths);
+    console.log('then createDir');
+    arrFilePaths.forEach((filePath) => {
+        createDir(filePath);
     });
-    // console.log(result); //выведет сообщение из resolve
+    return arrFilePaths;
 })
-.then(function(result) // filePath here
+.then(function(arrFilePaths)
 { // тут нужно скопировать файлы
-    let filePath = result;
-    let dirPath = getDirPath(filePath);
-    movingFile(filePath, dirPath);
+    // console.log('arr:', arrFilePaths);
+    console.log('then copyFile');
+    arrFilePaths.forEach((filePath) => {
+        fs.copyFile(filePath, path.join(getDirPath(filePath), getFileName(filePath)), (err) => { // copyFile(что, куда)
+            if (err){console.log('movingFile: ', err.message);}
+        });
+    });
 })
-.then(function() // filePath here
+.then(function()
 {
+    console.log('then removeDirRecursive');
     if (dirDelete === remFlag) {
-        removeDirRecursive(sourceDir, arrDirPaths);
+        return recursiveWalk(sourceDir, [], arrDirPaths, 'fd');
     }
 })
-.then(function() // filePath here
-{
-    removeDir();
+.then(function(arrElems) {
+    console.log('then removeDir');
+    if (dirDelete === remFlag) {
+        let arrDirPaths = [];
+        arrElems.forEach((elem) => {
+            let stat = fs.statSync(elem); // statSync=синхрон. вытаскиваем инфу по адресу пути(текущем объекте)
+            if (stat.isFile()) { // проверяем явл-ся ли он файлом
+                removeFile(elem);
+            }
+            else if (stat.isDirectory()) { // иначе это папка
+                arrDirPaths.push(elem);
+            }
+        });
+        removeDir(arrDirPaths);
+    }
 })
 .catch(function(err){
     console.log(err); //выведет сообщение из reject
@@ -91,16 +110,17 @@ doIt()
 // }
 /********************************************************************************************/
 /********************************************************************************************/
-function recursiveWalk(currentDirPath, arrFilePaths) { // обход дерева в ширину
+function recursiveWalk(currentDirPath, arrFilePaths, arrDirPaths, param) { // обход дерева в ширину
     try {
         fs.readdirSync(currentDirPath).forEach(file => {
-        let elemPath = path.join(currentDirPath, file); // делаем корретный URL
+            let elemPath = path.join(currentDirPath, file); // делаем корретный URL
             let stat = fs.statSync(elemPath); // statSync=синхрон. вытаскиваем инфу по адресу пути(текущем объекте)
             if (stat.isFile()) { // проверяем явл-ся ли он файлом
                 arrFilePaths.push(elemPath);
             }
             else if (stat.isDirectory()) { // иначе это папка
-                return recursiveWalk(elemPath, arrFilePaths); // спускаемся ниже и повторяем
+                arrDirPaths.push(elemPath);
+                return recursiveWalk(elemPath, arrFilePaths, arrDirPaths, param); // спускаемся ниже и повторяем
             }
         });
     }catch (err) {
@@ -108,8 +128,11 @@ function recursiveWalk(currentDirPath, arrFilePaths) { // обход дерев�
         return err;
     }
     if (currentDirPath === sourceDir){
-        return arrFilePaths;
-        // console.log('recursiveWalk: ', arrFilePaths);
+        if (param === 'f')
+            return arrFilePaths;
+        else if (param === 'fd'){
+            return arrFilePaths.concat(arrDirPaths);
+        }
     }
 }
 /********************************************************************************************/
@@ -173,15 +196,6 @@ function getDirPath(filePath) {
 function getFileName(filePath) {
     return path.basename(filePath);
 }
-
-function movingFile(filePath, dirPath) {
-    if (dirPath!==''){
-        fs.copyFile(filePath, dirPath + '/' + getFileName(filePath), (err) => { // copyFile(что, куда)
-            if (err) console.log('movingFile: ', err.message); //throw err.message;
-            //console.log(getFileName(filePath) + ' was copied');
-        });
-    }
-}
 /***********************************************************************/
 function removeFile(filePath) {
     return new Promise(resolve => {
@@ -197,42 +211,43 @@ function removeFile(filePath) {
     });
 }
 
-async function removeDirRecursive(currentDirPath, arrDirPaths){
-    fs.readdir(currentDirPath, function (err, files) { // readdir(асин) - считывает содержимое каталога.
-        if (err) {
-            // console.log('removeDirRecursive: ', err);
-            return err;
-        }
-        files.forEach( async function (fName) {
-            let filePath = path.join(currentDirPath, fName); // делаем корретный URL
-            try {
-                let stat = fs.statSync(filePath); // statSync=синхрон. вытаскиваем инфу по адресу пути(текущем объекте)
-                if (stat.isFile()) { // проверяем явл-ся ли он файлом
-                    await removeFile(filePath);
-                    return 0;
-                }
-                else if (stat.isDirectory()) { // иначе это папка
-                    arrDirPaths.push(filePath);
-                    //console.log('before ', filePath);
-                    return removeDirRecursive(filePath, arrDirPaths); // спускаемся ниже и повторяем
-                }
-            } catch (err) {
-                //console.log('removeDirRecursive: ', err.message);
-                return err;
-            }
-        });
-    });
-}
-
-function removeDir(){
+/********************************************************************************************/
+/********************************************************************************************/
+// async function removeDirRecursive(currentDirPath, arrDirPaths){
+//     fs.readdir(currentDirPath, function (err, files) { // readdir(асин) - считывает содержимое каталога.
+//         if (err) {
+//             // console.log('removeDirRecursive: ', err);
+//             return err;
+//         }
+//         files.forEach( async function (fName) {
+//             let filePath = path.join(currentDirPath, fName); // делаем корретный URL
+//             try {
+//                 let stat = fs.statSync(filePath); // statSync=синхрон. вытаскиваем инфу по адресу пути(текущем объекте)
+//                 if (stat.isFile()) { // проверяем явл-ся ли он файлом
+//                     await removeFile(filePath);
+//                     return 0;
+//                 }
+//                 else if (stat.isDirectory()) { // иначе это папка
+//                     arrDirPaths.push(filePath);
+//                     //console.log('before ', filePath);
+//                     return removeDirRecursive(filePath, arrDirPaths); // спускаемся ниже и повторяем
+//                 }
+//             } catch (err) {
+//                 //console.log('removeDirRecursive: ', err.message);
+//                 return err;
+//             }
+//         });
+//     });
+// }
+/********************************************************************************************/
+/********************************************************************************************/
+function removeDir(arrDirPaths){
     for (let i = arrDirPaths.length - 1; i >= 0; i--) {
-        // console.log("arrDirPaths[", i, '] =', arrDirPaths[i]);
         try{
             fs.rmdirSync(arrDirPaths[i]);
         }
         catch (e) {
-            return e;
-            //console.log('callback removeDirRecursive: ', e.message);
+            console.log('removeDir: ', e);
         }
     }
 }
