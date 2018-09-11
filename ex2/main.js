@@ -1,11 +1,8 @@
 const process = require('process');
-const util = require('util');
 const fs = require('fs');
 const path = require('path');
 
 const remFlag = '-d';
-// let fileCopy = util.promisify(fs.copyFile);
-// const fileCopySync = util.promisify(fs.copyFileSync);
 
 let sourceDir = process.argv[2] || './dir_1';  // [2] путь к исходной папке = sourceDir
 let finalDir = process.argv[3] || './collection'; // [3] путь к итоговой папке = finalDir
@@ -27,7 +24,7 @@ function doIt() {
                 if (err.code === 'EEXIST'){
                     console.log(`Directory \'${finalDir}\' has already exist`);
                     resolve( recursiveWalk(sourceDir, [], [], 'f') );}
-                else {console.log('mkdir finalDir:', err);}
+                else {console.log('mkdir finalDir:', err); reject();}
             } else{
                 console.log(`Directory \"${finalDir}\" created successfully!`);
                 resolve( recursiveWalk(sourceDir, [], [], 'f') );
@@ -37,30 +34,20 @@ function doIt() {
 }
 
 doIt()
-.then(function(arrFilePaths)
-{ // тут нужно создать папку
+.then(async function( arrFilePaths){ // тут нужно создать папку
     console.log('then createDir');
-    arrFilePaths.forEach(async (filePath) => {
-        await createDir(filePath);
-    });
+    for (let i = 0; i < arrFilePaths.length; i++) {
+        await createDir(arrFilePaths[i]);
+    }
     return arrFilePaths;
 })
-.then(function(arrFilePaths)
-{ // тут нужно скопировать файлы
+.then(async function(arrFilePaths){ // тут нужно скопировать файлы
     console.log('then copyFile');
-    arrFilePaths.forEach((filePath) => {
-        // await fileCopy(filePath, path.join(getDirPath(filePath), getFileName(filePath)), (err) => { // copyFile(что, куда)
-        //     if (err){console.log('movingFile: ', err.message);}
-        // });
-        try{
-            fs.copyFileSync( filePath, path.join(getDirPath(filePath), getFileName(filePath)) );
-        }catch (err) {
-            console.log('movingFile: ', err.message);
+        for (let i = 0; i < arrFilePaths.length; i++) {
+            await fileCopy(arrFilePaths[i]);
         }
-    });
 })
-.then(function()
-{
+.then(function(){ // если есть флаг - обходим всю папку
     console.log('then removeDirRecursive');
     if (dirDelete === remFlag) {
         return recursiveWalk(sourceDir, [], arrDirPaths, 'fd');
@@ -122,16 +109,37 @@ function createDir(filePath) {
                         if (!err) {// console.log(dirPath + " created successfully!");
                             resolve();
                         }
-                        else if (err.code === 'EEXIST'){resolve();} //console.log(dirPath, ': has already exist');
+                        else if (err.code === 'EEXIST'){
+                            resolve(); //console.log(dirPath, ': has already exist');
+                        }
                         reject();
                     });
                 }else{
                     console.log('createDir: ', err);
                     reject();
                 }
-            }
+            } else
+                resolve();
         });
     })
+}
+
+function fileCopy(filePath) {
+    return new Promise((resolve, reject) => {
+        let dirPath = getDirPath(filePath);
+        fs.stat(dirPath, (err) => {
+            if(err) {
+                console.log('fileCopy.stat: ', err.message);
+            }
+            fs.copyFile(filePath, path.join(getDirPath(filePath), getFileName(filePath)), (err) => { // copyFile(что, куда)
+                if (err) {
+                    console.log('fileCopy: ', err.code);
+                    reject();
+                }
+                resolve();
+            });
+        });
+    });
 }
 
 function getDirPath(filePath) {
@@ -145,12 +153,16 @@ function getFileName(filePath) {
 }
 
 function removeFile(filePath) {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
         fs.unlink(filePath, function (err) {
-            if (err && err.code === 'ENOENT') {// file doesn't exist
+            if (!err){
+                resolve();
+            }else if (err && err.code === 'ENOENT') {// file doesn't exist
                 console.log(filePath + " doesn't exist");
+                reject(); // todo тут надо reject или resolve?
             } else if (err) { // other errors
                 console.log('removeFile: ', err.message);
+                reject();
             }
         });
     });
