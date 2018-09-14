@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+	<meta charset="UTF-8">
+	<title>LR 2.1</title>
+</head>
+<body>
+	<div id="data" onClick="clic()" >текущая дата</div>
+	<script>
+        let url = "http://127.0.0.1:3000";
+        function ajaxGet(url, callback) {
+            var f = callback || function(data) {};
+
+            let request = new XMLHttpRequest();
+            request.onReadyStateChange = () => {
+                if (request.readyState === 4 && request.status === 200) {
+                    console.log('data:', request.responseText);
+                    f(request.responseText);
+                }
+            };
+            request.open('GET', url);
+            request.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            request.send();
+        }
+
+        function clic(){
+            console.log('clic');
+            ajaxGet(url, (data)=> {
+                console.log('data:', data);
+                document.querySelector("#data").textContent = data;
+            })
+		}
+	</script>
+</body>
+</html>
